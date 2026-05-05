@@ -1,0 +1,10 @@
+.git
+.github
+ansible
+__pycache__
+*.pyc
+*.pyo
+.env
+.venv
+*.md
+.dockerignore

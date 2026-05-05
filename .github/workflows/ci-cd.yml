@@ -1,0 +1,61 @@
+# ─── CI/CD Pipeline: Build → Push → Deploy (Render) ─────────
+# Bu workflow main branch'e push yapıldığında tetiklenir.
+# 1. Flask uygulamasını Docker image'ına dönüştürür
+# 2. Docker Hub'a push eder
+# 3. Render Deploy Hook'u tetikleyerek yeni sürümü yayına alır
+# ─────────────────────────────────────────────────────────────
+
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [main]
+
+env:
+  DOCKER_IMAGE: ${{ secrets.DOCKER_USER }}/flask-cicd-app:latest
+
+jobs:
+  # ═══════════════════════════════════════════════════════════
+  # JOB 1: Docker Image Build & Push
+  # ═══════════════════════════════════════════════════════════
+  build-and-push:
+    name: 🐳 Docker Build & Push
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 📥 Kodu indir (Checkout)
+        uses: actions/checkout@v4
+
+      - name: 🔐 Docker Hub'a giriş yap
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USER }}
+          password: ${{ secrets.DOCKER_PASS }}
+
+      - name: 🏗️ Docker image'ını build et ve push et
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: ${{ env.DOCKER_IMAGE }}
+
+  # ═══════════════════════════════════════════════════════════
+  # JOB 2: Render Deploy Hook ile Otomatik Deploy
+  # ═══════════════════════════════════════════════════════════
+  deploy:
+    name: 🚀 Render Deploy
+    runs-on: ubuntu-latest
+    needs: build-and-push
+
+    steps:
+      - name: 🔄 Render Deploy Hook'u tetikle
+        run: |
+          echo "🚀 Render'a deploy isteği gönderiliyor..."
+          RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" "${{ secrets.RENDER_DEPLOY_HOOK_URL }}")
+          echo "📡 HTTP Yanıt Kodu: $RESPONSE"
+          if [ "$RESPONSE" -eq 200 ] || [ "$RESPONSE" -eq 201 ]; then
+            echo "✅ Render deploy başarıyla tetiklendi!"
+          else
+            echo "❌ Render deploy tetiklenemedi! HTTP Kodu: $RESPONSE"
+            exit 1
+          fi
